@@ -144,15 +144,52 @@ async function groqASR(au,st){
  if(!words.length)throw Error('Groq tidak mengembalikan teks. Pastikan videonya ada suara.');
  return words}
 
+/* Cadangan: rekam audio saat video diputar (untuk file yang gagal didecode) */
+async function groqPost(blob,fn,off,key){
+ const fd=new FormData();fd.append('file',blob,fn);fd.append('model','whisper-large-v3-turbo');
+ fd.append('response_format','verbose_json');fd.append('timestamp_granularities[]','word');
+ fd.append('language',{indonesian:'id',english:'en'}[$('lang').value]);fd.append('temperature','0');
+ let r;
+ for(let t=0;t<3;t++){
+  try{r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+key},body:fd})}
+  catch(e){throw Error('Tidak bisa terhubung ke api.groq.com.')}
+  if(r.status!==429)break;await new Promise(x=>setTimeout(x,20000))}
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw Error('Groq: '+(j.error?.message||r.status));
+ return (j.words||[]).map(w=>({t:' '+w.word,s:w.start+off,e:w.end+off}))}
+
+async function groqLive(st){
+ const key=$('gk').value.trim();if(!key)throw Error('Isi API key Groq dulu.');
+ try{localStorage.gk=key}catch(e){}
+ const v=document.createElement('video');v.playsInline=true;
+ await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(Error('Video tidak bisa diputar di browser ini. Ubah dulu ke MP4 (H.264/AAC).'));v.src=S.url});
+ const ac=new AudioContext();await ac.resume();
+ const dst=ac.createMediaStreamDestination();ac.createMediaElementSource(v).connect(dst);
+ const SEC=600,total=Math.ceil(v.duration/SEC),words=[];
+ const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
+ for(let i=0;i<total;i++){
+  const s0=i*SEC,s1=Math.min(v.duration,s0+SEC);
+  await new Promise(r=>{v.onseeked=r;v.currentTime=Math.max(s0,.01)});
+  const rec=new MediaRecorder(dst.stream,{mimeType:mime}),ch=[];rec.ondataavailable=e=>ch.push(e.data);
+  const fin=new Promise(r=>rec.onstop=r);
+  rec.start();await v.play();
+  await new Promise(res=>{const f=()=>{if(v.currentTime>=s1||v.ended){res();return}
+   st.textContent='Browser tidak bisa mendecode audio, memakai cara cadangan: merekam audio '+Math.round(v.currentTime)+'/'+Math.round(v.duration)+' dtk. Biarkan tab terbuka.';setTimeout(f,500)};f()});
+  v.pause();rec.stop();await fin;
+  st.textContent='Mengirim audio ke Groq ('+(i+1)+'/'+total+')...';
+  words.push(...await groqPost(new Blob(ch,{type:mime}),'a.'+(mime.includes('mp4')?'m4a':'webm'),s0,key))}
+ ac.close();
+ if(!words.length)throw Error('Groq tidak mengembalikan teks. Audio mungkin kosong atau codec audionya tidak didukung browser.');
+ return words}
+
 /* Transkrip (Whisper di browser) */
 $('tr').onclick=async()=>{
  const st=$('s2'),b=$('tr');b.disabled=true;
  try{
   st.textContent='Membaca audio...';
-  const ac=new AudioContext({sampleRate:16000});
-  const a=await ac.decodeAudioData(await S.file.arrayBuffer());
-  const au=a.getChannelData(0);
-  if($('tm').value==='groq')S.words=await groqASR(au,st);
+  let au=null;
+  try{const ac=new AudioContext({sampleRate:16000});au=(await ac.decodeAudioData(await S.file.arrayBuffer())).getChannelData(0)}
+  catch(e){if($('tm').value!=='groq')throw Error('Browser tidak bisa membaca audio video ini. Coba video MP4 (H.264/AAC) atau pakai metode Groq.')}
+  if($('tm').value==='groq')S.words=au?await groqASR(au,st):await groqLive(st);
   else{const asr=await loadASR(st);
   st.textContent='Mentranskrip... (bisa beberapa menit)';
   const o=await asr(au,{language:$('lang').value,task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
