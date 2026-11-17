@@ -90,6 +90,22 @@ $('f').onchange=e=>{const f=e.target.files[0];if(!f)return;
 
 $('mth').onchange=()=>{$('lm').value={gemini:'gemini-2.5-flash',claude:'claude-sonnet-5-5',local:''}[$('mth').value]};
 
+/* Muat library + model, dengan server cadangan */
+const LIBS=['https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm','https://fastly.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm','https://gcore.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm','https://esm.sh/@huggingface/transformers@3.5.1'];
+const HOSTS=['https://huggingface.co/','https://hf-mirror.com/'];
+let TF;
+async function loadASR(st){
+ if(!TF){
+  for(const u of LIBS){try{st.textContent='Memuat library dari '+new URL(u).host+'...';TF=await import(u);break}catch(e){}}
+  if(!TF)throw Error('Library gagal dimuat dari semua server (jsdelivr dan esm.sh). Cek koneksi, nyalakan VPN, atau matikan pemblokir iklan.')}
+ TF.env.allowLocalModels=false;
+ const errs=[];
+ for(const h of HOSTS){const hn=new URL(h).host;
+  try{TF.env.remoteHost=h;st.textContent='Mengunduh model dari '+hn+'...';
+   return await TF.pipeline('automatic-speech-recognition',$('mdl').value,{progress_callback:p=>{if(p.status==='progress')st.textContent='Mengunduh model ('+hn+'): '+Math.round(p.progress)+'%'}})}
+  catch(e){errs.push(hn+': '+e.message)}}
+ throw Error('Model gagal diunduh dari semua server. '+errs.join(' | ')+'. Coba nyalakan VPN atau ganti DNS ke 1.1.1.1.')}
+
 /* Transkrip (Whisper di browser) */
 $('tr').onclick=async()=>{
  const st=$('s2'),b=$('tr');b.disabled=true;
@@ -98,10 +114,7 @@ $('tr').onclick=async()=>{
   const ac=new AudioContext({sampleRate:16000});
   const a=await ac.decodeAudioData(await S.file.arrayBuffer());
   const au=a.getChannelData(0);
-  st.textContent='Memuat model (unduhan pertama bisa lama)...';
-  const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm');
-  const asr=await pipeline('automatic-speech-recognition',$('mdl').value,
-   {progress_callback:p=>{if(p.status==='progress')st.textContent='Mengunduh model: '+Math.round(p.progress)+'%'}});
+  const asr=await loadASR(st);
   st.textContent='Mentranskrip... (bisa beberapa menit)';
   const o=await asr(au,{language:$('lang').value,task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
   S.words=o.chunks.map(c=>({t:c.text,s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3}));
