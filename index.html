@@ -38,6 +38,10 @@ a{color:var(--ac);font-weight:600}
 
 <div class="c"><h2>2. Buat transkrip</h2>
 <div class="r">
+<div><label>Metode</label><select id="tm"><option value="groq">Groq Whisper (API, tanpa unduh model)</option><option value="local">Whisper di browser</option></select></div>
+<div><label>API key Groq (gratis di console.groq.com)</label><input id="gk" type="password" autocomplete="off" placeholder="gsk_..."></div>
+</div>
+<div class="r">
 <div><label>Bahasa</label><select id="lang"><option value="indonesian">Indonesia</option><option value="english">English</option></select></div>
 <div><label>Model</label><select id="mdl"><option value="Xenova/whisper-tiny">Tiny (cepat)</option><option value="Xenova/whisper-base" selected>Base</option><option value="Xenova/whisper-small">Small (akurat, berat)</option></select></div>
 </div>
@@ -82,7 +86,7 @@ const $=id=>document.getElementById(id);
 const S={words:[],clips:[]};
 const FM={'9:16':[720,1280],'16:9':[1280,720],'1:1':[720,720]};
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-try{$('key').value=localStorage.ck||''}catch(e){}
+try{$('key').value=localStorage.ck||'';$('gk').value=localStorage.gk||''}catch(e){}
 
 $('f').onchange=e=>{const f=e.target.files[0];if(!f)return;
  S.file=f;S.url=URL.createObjectURL(f);$('v').src=S.url;$('v').hidden=false;
@@ -106,6 +110,40 @@ async function loadASR(st){
   catch(e){errs.push(hn+': '+e.message)}}
  throw Error('Model gagal diunduh dari semua server. '+errs.join(' | ')+'. Coba nyalakan VPN atau ganti DNS ke 1.1.1.1.')}
 
+/* Transkrip lewat Groq Whisper (hanya audio yang dikirim) */
+function wav(f,sr=16000){
+ const n=f.length,b=new ArrayBuffer(44+n*2),v=new DataView(b);
+ const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+ w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+ v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+ for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,f[i]));v.setInt16(44+i*2,s<0?s*32768:s*32767,true)}
+ return new Blob([b],{type:'audio/wav'})}
+
+async function groqASR(au,st){
+ const key=$('gk').value.trim();if(!key)throw Error('Isi API key Groq dulu.');
+ try{localStorage.gk=key}catch(e){}
+ const SR=16000,SEC=600,CH=SEC*SR,total=Math.ceil(au.length/CH),words=[];
+ for(let i=0;i<total;i++){
+  st.textContent=`Mengirim audio ke Groq (${i+1}/${total})...`;
+  const fd=new FormData();
+  fd.append('file',wav(au.subarray(i*CH,(i+1)*CH)),'audio.wav');
+  fd.append('model','whisper-large-v3-turbo');
+  fd.append('response_format','verbose_json');
+  fd.append('timestamp_granularities[]','word');
+  fd.append('language',{indonesian:'id',english:'en'}[$('lang').value]);
+  fd.append('temperature','0');
+  let r;
+  for(let t=0;t<3;t++){
+   try{r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+key},body:fd})}
+   catch(e){throw Error('Tidak bisa terhubung ke api.groq.com. Cek internet atau nyalakan VPN.')}
+   if(r.status!==429)break;
+   st.textContent='Batas Groq tercapai, menunggu 20 detik...';await new Promise(x=>setTimeout(x,20000))}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error('Groq: '+(j.error?.message||r.status));
+  (j.words||[]).forEach(w=>words.push({t:' '+w.word,s:w.start+i*SEC,e:w.end+i*SEC}))}
+ if(!words.length)throw Error('Groq tidak mengembalikan teks. Pastikan videonya ada suara.');
+ return words}
+
 /* Transkrip (Whisper di browser) */
 $('tr').onclick=async()=>{
  const st=$('s2'),b=$('tr');b.disabled=true;
@@ -114,10 +152,11 @@ $('tr').onclick=async()=>{
   const ac=new AudioContext({sampleRate:16000});
   const a=await ac.decodeAudioData(await S.file.arrayBuffer());
   const au=a.getChannelData(0);
-  const asr=await loadASR(st);
+  if($('tm').value==='groq')S.words=await groqASR(au,st);
+  else{const asr=await loadASR(st);
   st.textContent='Mentranskrip... (bisa beberapa menit)';
   const o=await asr(au,{language:$('lang').value,task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
-  S.words=o.chunks.map(c=>({t:c.text,s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3}));
+  S.words=o.chunks.map(c=>({t:c.text,s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3}))}
   st.textContent='Selesai: '+S.words.length+' kata.';$('go').disabled=false;
  }catch(e){st.textContent='Gagal: '+e.message}
  b.disabled=false};
