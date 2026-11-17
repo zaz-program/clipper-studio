@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper Pribadi</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--tx:#14181d;--mu:#5d6772;--ac:#0a6e5c;--bd:#d6dce2;--in:#f3f5f7}
+@media(prefers-color-scheme:dark){:root{--bg:#101315;--card:#191d20;--tx:#eceff2;--mu:#98a3ad;--ac:#2fbf9f;--bd:#2b3238;--in:#242a2f}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:760px;margin:auto;padding:16px}
+h1{font-size:24px;margin:10px 0 2px;letter-spacing:-.01em}
+p.s{color:var(--mu);margin:0 0 16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+h2{font-size:15px;margin:0 0 8px}
+label{display:block;font-size:12px;color:var(--mu);margin:8px 0 3px}
+input,select,button{font:inherit;color:inherit}
+input,select{width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--in)}
+input[type=checkbox]{width:auto}
+.r{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer}
+@media(prefers-color-scheme:dark){button{color:#06231c}}
+button.g{background:var(--in);color:var(--tx);border:1px solid var(--bd)}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+video{width:100%;border-radius:8px;background:#000;max-height:300px;margin-top:8px}
+.st{color:var(--mu);font-size:13px;margin-top:8px}
+.clip{border-top:1px solid var(--bd);padding:10px 0}
+.clip .r{align-items:end}
+.bar{height:5px;background:var(--in);border-radius:3px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--ac)}
+a{color:var(--ac);font-weight:600}
+</style></head><body><main>
+<h1>Clipper Pribadi</h1>
+<p class="s">Semua diproses di browser Anda. Video tidak diunggah ke server. Gunakan Chrome atau Edge di komputer.</p>
+
+<div class="c"><h2>1. Pilih video</h2>
+<input type="file" id="f" accept="video/*"><video id="v" controls hidden></video></div>
+
+<div class="c"><h2>2. Buat transkrip</h2>
+<div class="r">
+<div><label>Bahasa</label><select id="lang"><option value="indonesian">Indonesia</option><option value="english">English</option></select></div>
+<div><label>Model</label><select id="mdl"><option value="Xenova/whisper-tiny">Tiny (cepat)</option><option value="Xenova/whisper-base" selected>Base</option><option value="Xenova/whisper-small">Small (akurat, berat)</option></select></div>
+</div>
+<button id="tr" disabled style="margin-top:10px">Mulai transkrip</button>
+<div class="st" id="s2">Pilih video dulu.</div></div>
+
+<div class="c"><h2>3. Cari klip terbaik</h2>
+<div class="r">
+<div><label>Metode</label><select id="mth"><option value="local">Lokal (tanpa API)</option><option value="gemini">Gemini (API key sendiri)</option><option value="claude">Claude (API key sendiri)</option></select></div>
+<div><label>Model AI</label><input id="lm" placeholder="hanya untuk Gemini/Claude"></div>
+<div><label>API key</label><input id="key" type="password" autocomplete="off" placeholder="kosongkan jika lokal"></div>
+</div>
+<div class="r">
+<div><label>Durasi min (dtk)</label><input id="mn" type="number" value="20"></div>
+<div><label>Durasi maks (dtk)</label><input id="mx" type="number" value="60"></div>
+<div><label>Jumlah klip</label><input id="nn" type="number" value="5"></div>
+</div>
+<button id="go" disabled style="margin-top:10px">Cari klip</button>
+<div class="st" id="s3"></div></div>
+
+<div class="c"><h2>4. Tampilan</h2>
+<div class="r">
+<div><label>Format</label><select id="fm"><option>9:16</option><option>16:9</option><option>1:1</option></select></div>
+<div><label>Bingkai</label><select id="fit"><option value="crop">Crop penuh</option><option value="blur">Muat + latar blur</option></select></div>
+<div><label>Posisi crop (kiri-kanan)</label><input id="px" type="range" min="0" max="1" step=".05" value=".5"></div>
+</div>
+<div class="r">
+<div><label>Style caption</label><select id="sty"><option value="pop">Pop kuning</option><option value="box">Kotak</option><option value="min">Minimal</option><option value="neon">Neon hijau</option></select></div>
+<div><label>Posisi caption</label><select id="ps"><option value=".15">Atas</option><option value=".5">Tengah</option><option value=".75" selected>Bawah</option></select></div>
+<div><label>Ukuran huruf</label><input id="sz" type="range" min="4" max="12" step=".5" value="7"></div>
+<div><label>Kata per baris</label><input id="wn" type="range" min="1" max="6" value="3"></div>
+</div>
+<label><input type="checkbox" id="cap" checked> Tampilkan caption</label>
+<label><input type="checkbox" id="up" checked> Huruf besar</label></div>
+
+<div class="c"><h2>5. Klip</h2>
+<button id="all" class="g">Render semua</button>
+<div id="cl"><div class="st">Belum ada klip.</div></div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const S={words:[],clips:[]};
+const FM={'9:16':[720,1280],'16:9':[1280,720],'1:1':[720,720]};
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+try{$('key').value=localStorage.ck||''}catch(e){}
+
+$('f').onchange=e=>{const f=e.target.files[0];if(!f)return;
+ S.file=f;S.url=URL.createObjectURL(f);$('v').src=S.url;$('v').hidden=false;
+ $('tr').disabled=false;$('s2').textContent='Siap ditranskrip.'};
+
+$('mth').onchange=()=>{$('lm').value={gemini:'gemini-2.5-flash',claude:'claude-sonnet-5-5',local:''}[$('mth').value]};
+
+/* Transkrip (Whisper di browser) */
+$('tr').onclick=async()=>{
+ const st=$('s2'),b=$('tr');b.disabled=true;
+ try{
+  st.textContent='Membaca audio...';
+  const ac=new AudioContext({sampleRate:16000});
+  const a=await ac.decodeAudioData(await S.file.arrayBuffer());
+  const au=a.getChannelData(0);
+  st.textContent='Memuat model (unduhan pertama bisa lama)...';
+  const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm');
+  const asr=await pipeline('automatic-speech-recognition',$('mdl').value,
+   {progress_callback:p=>{if(p.status==='progress')st.textContent='Mengunduh model: '+Math.round(p.progress)+'%'}});
+  st.textContent='Mentranskrip... (bisa beberapa menit)';
+  const o=await asr(au,{language:$('lang').value,task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
+  S.words=o.chunks.map(c=>({t:c.text,s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3}));
+  st.textContent='Selesai: '+S.words.length+' kata.';$('go').disabled=false;
+ }catch(e){st.textContent='Gagal: '+e.message}
+ b.disabled=false};
+
+/* Cari klip */
+const sents=w=>{const R=[];let c=[];w.forEach((x,i)=>{c.push(x);const n=w[i+1];
+ if(/[.?!]$/.test(x.t.trim())||!n||n.s-x.e>.7){R.push(c);c=[]}});return R};
+
+function local(w,mn,mx,n){
+ const S2=sents(w),cand=[];
+ for(let i=0;i<S2.length;i++){let ws=[];
+  for(let j=i;j<S2.length;j++){ws=ws.concat(S2[j]);const d=ws.at(-1).e-ws[0].s;
+   if(d>=mn){if(d<=mx){const tx=ws.map(x=>x.t).join('');
+    cand.push({s:ws[0].s,e:ws.at(-1).e,score:(tx.match(/[?!]/g)||[]).length*2+ws.length/d*3,title:tx.trim().slice(0,50)})}break}}}
+ cand.sort((a,b)=>b.score-a.score);
+ const out=[];for(const c of cand){if(out.length>=n)break;if(!out.some(o=>c.s<o.e&&c.e>o.s))out.push(c)}
+ return out.sort((a,b)=>a.s-b.s)}
+
+async function llm(m,mn,mx,n){
+ const key=$('key').value.trim(),mod=$('lm').value.trim();
+ if(!key||!mod)throw Error('Isi model dan API key.');
+ try{localStorage.ck=key}catch(e){}
+ const tx=sents(S.words).map(s=>'['+s[0].s.toFixed(1)+'] '+s.map(x=>x.t).join('').trim()).join('\n');
+ const p=`Dari transkrip video berikut (angka dalam kurung = detik), pilih ${n} momen paling menarik untuk klip pendek. Tiap klip ${mn}-${mx} detik, mulai dan berakhir di batas kalimat, tidak tumpang tindih. Balas HANYA JSON array: [{"start":detik,"end":detik,"title":"judul singkat"}]\n\n${tx}`;
+ let out,r,j;
+ if(m==='gemini'){
+  r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mod}:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:p}]}]})});
+  j=await r.json();if(!r.ok)throw Error(j.error?.message||r.status);out=j.candidates[0].content.parts[0].text;
+ }else{
+  r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:mod,max_tokens:2000,messages:[{role:'user',content:p}]})});
+  j=await r.json();if(!r.ok)throw Error(j.error?.message||r.status);out=j.content[0].text}
+ return JSON.parse(out.match(/\[[\s\S]*\]/)[0]).map(x=>({s:+x.start,e:+x.end,title:x.title||''})).filter(x=>x.e>x.s)}
+
+$('go').onclick=async()=>{
+ const m=$('mth').value,mn=+$('mn').value,mx=+$('mx').value,n=+$('nn').value,st=$('s3');
+ st.textContent='Mencari...';
+ try{S.clips=m==='local'?local(S.words,mn,mx,n):await llm(m,mn,mx,n);
+  show();st.textContent=S.clips.length+' klip ditemukan.'}
+ catch(e){st.textContent='Gagal: '+e.message}};
+
+function show(){
+ const box=$('cl');box.innerHTML='';
+ S.clips.forEach((c,i)=>{
+  const d=document.createElement('div');d.className='clip';
+  d.innerHTML=`<b>${i+1}. ${esc(c.title||'Klip')}</b>
+  <div class="r"><div><label>Mulai (dtk)</label><input type="number" step=".1" value="${c.s.toFixed(1)}" data-k="s"></div>
+  <div><label>Selesai (dtk)</label><input type="number" step=".1" value="${c.e.toFixed(1)}" data-k="e"></div>
+  <button class="g" data-a="v">Lihat</button><button data-a="r">Render</button></div>
+  <div class="bar"><i></i></div><div class="o"></div>`;
+  d.querySelectorAll('input').forEach(x=>x.onchange=()=>c[x.dataset.k]=+x.value);
+  d.querySelector('[data-a=v]').onclick=()=>{$('v').currentTime=c.s;$('v').play()};
+  c.run=()=>render(c,d);
+  d.querySelector('[data-a=r]').onclick=c.run;
+  box.appendChild(d)})}
+$('all').onclick=async()=>{for(const c of S.clips)await c.run()};
+
+/* Render: canvas + MediaRecorder (real-time) */
+const opt=()=>({fmt:$('fm').value,fit:$('fit').value,x:+$('px').value,sty:$('sty').value,sz:+$('sz').value,pos:+$('ps').value,up:$('up').checked,n:+$('wn').value,cap:$('cap').checked});
+function grp(ws,n){const R=[];let c=[];ws.forEach((w,i)=>{c.push(w);const x=ws[i+1];if(c.length>=n||!x||x.s-w.e>.5){R.push(c);c=[]}});return R}
+
+function frame(g,v,W,H,t,O,G){
+ const vw=v.videoWidth,vh=v.videoHeight;g.fillStyle='#000';g.fillRect(0,0,W,H);
+ const cover=()=>{const s=Math.max(W/vw,H/vh),w=vw*s,h=vh*s;g.drawImage(v,(W-w)*O.x,(H-h)/2,w,h)};
+ if(O.fit==='blur'){g.filter='blur(28px) brightness(.6)';cover();g.filter='none';
+  const s=Math.min(W/vw,H/vh),w=vw*s,h=vh*s;g.drawImage(v,(W-w)/2,(H-h)/2,w,h)}else cover();
+ if(O.cap)cap(g,W,H,t,O,G)}
+
+function cap(g,W,H,t,O,G){
+ const i=G.findIndex((x,k)=>t>=x[0].s-.05&&t<(G[k+1]?G[k+1][0].s:x.at(-1).e+.4));if(i<0)return;
+ const ws=G[i],tx=ws.map(w=>{const s=w.t.trim();return O.up?s.toUpperCase():s});
+ let fs=Math.min(W,H)*O.sz/100,wd,sp,tot;
+ const M=()=>{g.font=`900 ${fs}px "Arial Black",Impact,sans-serif`;sp=fs*.3;wd=tx.map(s=>g.measureText(s).width);tot=wd.reduce((a,b)=>a+b,0)+sp*(tx.length-1)};
+ M();if(tot>W*.9){fs*=W*.9/tot;M()}
+ g.textBaseline='middle';g.textAlign='left';g.lineJoin='round';
+ const y=H*O.pos,a=ws.findLastIndex(w=>w.s<=t);let x=(W-tot)/2;
+ if(O.sty==='box'){g.fillStyle='rgba(0,0,0,.7)';g.beginPath();g.roundRect(x-fs*.4,y-fs*.7,tot+fs*.8,fs*1.4,fs*.3);g.fill()}
+ tx.forEach((s,k)=>{const on=k===a;
+  if(O.sty==='box'&&on){g.fillStyle='#ff3b6b';g.beginPath();g.roundRect(x-fs*.15,y-fs*.55,wd[k]+fs*.3,fs*1.1,fs*.25);g.fill()}
+  if(O.sty==='pop'){g.lineWidth=fs*.22;g.strokeStyle='#000';g.strokeText(s,x,y)}
+  if(O.sty==='min'){g.shadowColor='rgba(0,0,0,.85)';g.shadowBlur=fs*.2}
+  if(O.sty==='neon'&&on){g.shadowColor='#39ff14';g.shadowBlur=fs*.5}
+  g.fillStyle=on?({pop:'#ffe600',box:'#fff',min:'#fff',neon:'#39ff14'})[O.sty]:'#fff';
+  g.fillText(s,x,y);g.shadowBlur=0;x+=wd[k]+sp})}
+
+async function render(c,d){
+ const O=opt(),[W,H]=FM[O.fmt],bar=d.querySelector('.bar i'),out=d.querySelector('.o'),bs=d.querySelectorAll('button');
+ bs.forEach(b=>b.disabled=true);out.textContent='Merender. Biarkan tab ini tetap terbuka dan terlihat.';
+ try{
+  const G=grp(S.words.filter(w=>w.s>=c.s-.05&&w.e<=c.e+.3),O.n);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
+  const rv=document.createElement('video');rv.playsInline=true;
+  await new Promise(r=>{rv.onloadedmetadata=r;rv.src=S.url});
+  await new Promise(r=>{rv.onseeked=r;rv.currentTime=Math.max(c.s,.05)});
+  const ac=new AudioContext();await ac.resume();
+  const dst=ac.createMediaStreamDestination();ac.createMediaElementSource(rv).connect(dst);
+  const stm=cv.captureStream(30);dst.stream.getAudioTracks().forEach(t=>stm.addTrack(t));
+  const mime=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/webm;codecs=vp9,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));
+  const rec=new MediaRecorder(stm,{mimeType:mime,videoBitsPerSecond:6e6}),ch=[];
+  rec.ondataavailable=e=>ch.push(e.data);
+  const fin=new Promise(r=>rec.onstop=r);
+  frame(g,rv,W,H,c.s,O,G);rec.start();await rv.play();
+  await new Promise(res=>{const f=()=>{const t=rv.currentTime;if(t>=c.e||rv.ended){res();return}
+   frame(g,rv,W,H,t,O,G);bar.style.width=(100*(t-c.s)/(c.e-c.s))+'%';requestAnimationFrame(f)};f()});
+  rv.pause();rec.stop();await fin;ac.close();bar.style.width='100%';
+  const u=URL.createObjectURL(new Blob(ch,{type:mime.split(';')[0]})),ext=mime.includes('mp4')?'mp4':'webm';
+  out.innerHTML=`<video controls src="${u}" style="max-width:260px"></video><br><a download="klip-${c.s.toFixed(0)}.${ext}" href="${u}">Unduh klip (${ext})</a>`;
+ }catch(e){out.textContent='Gagal: '+e.message}
+ bs.forEach(b=>b.disabled=false)}
+</script></body></html>
